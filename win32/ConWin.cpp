@@ -384,6 +384,10 @@ void ConWindow::resize(short width, short height)
 
   clear();
 } // end ConWindow::resize
+void ConWindow::resize(short width)
+{
+  resize(width, size.Y);
+}
 
 //--------------------------------------------------------------------
 void ConWindow::setAttribs(Style color)

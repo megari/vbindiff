@@ -149,6 +149,8 @@ void ConWindow::init(short x, short y, short width, short height, Style attrib)
   keypad(win, TRUE);            // enable keyboard mapping
 
   clear();
+  winWidth = width;
+  winHeight = height;
 } // end ConWindow::init
 
 //--------------------------------------------------------------------
@@ -242,8 +244,13 @@ void ConWindow::resize(short width, short height)
   replace_panel(pan, win);
 
   clear();
+  winWidth = width;
+  winHeight = height;
 } // end ConWindow::resize
-
+void ConWindow::resize(short width)
+{
+  resize(width, winHeight);
+}
 //--------------------------------------------------------------------
 void ConWindow::setAttribs(Style color)
 {

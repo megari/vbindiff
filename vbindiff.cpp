@@ -121,7 +121,7 @@ const int  lineWidth = 16;      // Number of bytes displayed per line
 
 const int  promptHeight = 4;    // Height of prompt window
 const int  inWidth = 10;        // Width of input window (excluding border)
-const int  screenWidth = 80;
+const int  screenBaseWidth = 80;
 
 const int  maxPath = 260;
 
@@ -156,6 +156,8 @@ class FileDisplay
   File               file;
   char               fileName[maxPath];
   FPos               offset;
+  FPos               fileSize;
+  int                screenWidth;
   ConWindow          win;
   bool               writable;
   int                yPos;
@@ -410,7 +412,7 @@ void FileDisplay::init(int y, const Difference* aDiff,
   diffs = aDiff;
   yPos  = y;
 
-  win.init(0,y, screenWidth, (numLines + 1 + ((y==0) ? linesBetween : 0)),
+  win.init(0,y, screenBaseWidth, (numLines + 1 + ((y==0) ? linesBetween : 0)),
            cFileWin);
 
   resize();
@@ -463,7 +465,7 @@ void FileDisplay::display()
   char  buf[lineWidth + lineWidth/8 + 1];
   buf[sizeof(buf)-1] = '\0';
 
-  char  buf2[screenWidth+1];
+  char  *buf2 = new char[screenWidth+1];
   buf2[screenWidth] = '\0';
 
   memset(buf, ' ', sizeof(buf)-1);
@@ -471,6 +473,13 @@ void FileDisplay::display()
   for (i = 0; i < numLines; i++) {
 //    cerr << i << '\n';
     char*  str = buf2;
+
+    if (fileSize & ((FPos) 0xFFFF000000000000))
+      str +=
+        sprintf(str, "%04X ",Word(lineOffset>>48));
+    if (fileSize & ((FPos) 0x0000FFFF00000000))
+      str +=
+        sprintf(str, "%04X ",Word((lineOffset>>32)&0xFFFF));
     str +=
       sprintf(str, "%04X %04X:",Word(lineOffset>>16),Word(lineOffset&0xFFFF));
 
@@ -490,18 +499,19 @@ void FileDisplay::display()
     memset(str, ' ', screenWidth - (str - buf2));
 
     win.put(0,i+1, buf2);
-    win.put(leftMar2,i+1, buf);
+    win.put(leftMar2 + (screenWidth - screenBaseWidth),i+1, buf);
 
     if (diffs)
       for (j = 0; j < lineWidth; j++)
         if (diffs->data->line[i][j]) {
-          win.putAttribs(j*3 + leftMar  + (j>7),i+1, cFileDiff,2);
-          win.putAttribs(j   + leftMar2 + (j>7),i+1, cFileDiff,1);
+          win.putAttribs(j*3 + leftMar  + (j>7) + (screenWidth - screenBaseWidth),i+1, cFileDiff,2);
+          win.putAttribs(j   + leftMar2 + (j>7) + (screenWidth - screenBaseWidth),i+1, cFileDiff,1);
         }
     lineOffset += lineWidth;
   } // end for i up to numLines
 
   win.update();
+  delete[] buf2;
 } // end FileDisplay::display
 
 //--------------------------------------------------------------------
@@ -834,16 +844,27 @@ bool FileDisplay::setFile(const char* aFileName)
   strncpy(fileName, aFileName, maxPath);
   fileName[maxPath-1] = '\0';
 
-  win.put(0,0, fileName);
-  win.putAttribs(0,0, cFileName, screenWidth);
-  win.update();                 // FIXME
-
   bufContents = 0;
   file = OpenFile(fileName);
   writable = false;
 
   if (file == InvalidFile)
     return false;
+
+  fileSize = SeekFile(file, 0, SeekEnd) + 1;
+  if (SeekFile(file, 0) != 0)
+    return false;
+
+  const int screenWidthAdjustment =
+    ((fileSize & ((FPos) 0xFFFF000000000000)) ? 5 : 0) +
+    ((fileSize & ((FPos) 0x0000FFFF00000000)) ? 5 : 0);
+
+  screenWidth = screenBaseWidth + screenWidthAdjustment;
+
+  win.resize(screenWidth);
+  win.put(0,0, fileName);
+  win.putAttribs(0,0, cFileName, screenWidth);
+  win.update();                 // FIXME
 
   offset = 0;
   bufContents = ReadFile(file, data->buffer, bufSize);
@@ -860,10 +881,10 @@ void calcScreenLayout(bool resize = true)
 
   ConWindow::getScreenSize(screenX, screenY);
 
-  if (screenX < screenWidth) {
+  if (screenX < screenBaseWidth) {
     ostringstream  err;
     err << "The screen must be at least "
-        << screenWidth << " characters wide.";
+        << screenBaseWidth << " characters wide.";
     exitMsg(2, err.str().c_str());
   }
 
@@ -1278,7 +1299,7 @@ int packHex(Byte* buf)
 void positionInWin(Command cmd, short width, const char* title)
 {
   inWin.resize(width, 3);
-  inWin.move((screenWidth-width)/2,
+  inWin.move((screenBaseWidth-width)/2,
              ((!singleFile && (cmd & cmgGotoBottom))
               ? ((cmd & cmgGotoTop)
                  ? numLines + linesBetween                   // Moving both
@@ -1384,7 +1405,7 @@ bool initialize()
   if (singleFile) y = numLines + 1;
   else            y = numLines * 2 + linesBetween + 2;
 
-  promptWin.init(0,y, screenWidth,promptHeight, cBackground);
+  promptWin.init(0,y, screenBaseWidth,promptHeight, cBackground);
   showPrompt();
 
   if (!singleFile) diffs.resize();
@@ -1597,9 +1618,9 @@ void searchFiles(Command cmd)
   if (key == 'N' && havePrev) {
     inWin.hide();
   } else {
-    positionInWin(cmd, screenWidth, (hex ? " Find Hex Bytes" : " Find Text "));
+    positionInWin(cmd, screenBaseWidth, (hex ? " Find Hex Bytes" : " Find Text "));
 
-    const int  maxLen = screenWidth-4;
+    const int  maxLen = screenBaseWidth-4;
     Byte  buf[maxLen+1];
     int   searchLen;
 

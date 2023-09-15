@@ -48,6 +48,8 @@ class ConWindow
  protected:
   PANEL   *pan;
   WINDOW  *win;
+  short winWidth;
+  short winHeight;
 
  public:
   ConWindow();
@@ -64,6 +66,7 @@ class ConWindow
   void putChar(short x, short y, char c, short count);
   int  readKey();
   void resize(short width, short height);
+  void resize(short width);
   void setAttribs(Style color);
   void setCursor(short x, short y);
   void update(unsigned short margin=0) {};
